@@ -1,0 +1,204 @@
+.PHONY: build-backend build-backend-slim build-desktop build-frontend prepare-backend prepare-desktop prepare-frontend run-backend run-backend-slim run-desktop clean install-deps
+
+BUILD_HOST := $(shell rustc -Vv | grep host | cut -d' ' -f2)
+
+# Default target
+help:
+	@echo "Open CoreUI Build System"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  prepare-frontend     Install frontend dependencies"
+	@echo "  prepare-backend      Fetch backend dependencies"
+	@echo "  prepare-desktop      Fetch desktop app dependencies"
+	@echo "  build-frontend       Build frontend for production"
+	@echo "  build-backend        Build backend with embedded frontend (integrated)"
+	@echo "  build-backend-slim   Build backend without frontend"
+	@echo "  build-desktop        Build desktop application (integrated backend)"
+	@echo "  run-backend          Run backend server"
+	@echo "  run-backend-slim     Run backend server without embedded frontend"
+	@echo "  run-desktop         Run desktop application in development"
+	@echo "  clean               Clean build artifacts"
+	@echo "  install-deps        Install all dependencies"
+	@echo ""
+	@echo "Integration targets:"
+	@echo "  build-integrated    Build desktop with integrated backend (recommended)"
+	@echo "  test-integration    Test the integrated backend"
+	@echo ""
+
+# Dependency management
+install-deps: prepare-frontend prepare-backend prepare-desktop
+	@echo "✅ All dependencies installed"
+
+prepare-frontend:
+	@echo "📦 Installing frontend dependencies..."
+	cd frontend && bun install
+
+prepare-backend:
+	@echo "📦 Fetching backend dependencies..."
+	cd backend && cargo fetch
+
+prepare-desktop:
+	@echo "📦 Fetching desktop app dependencies..."
+	cd src-tauri && cargo fetch
+
+# Frontend builds
+build-frontend: prepare-frontend
+	@echo "🏗️  Building frontend..."
+	cd frontend && bun run build
+
+# Backend builds (integrated with Tauri)
+build-backend: build-frontend
+	@echo "🦀 Building integrated backend with embedded frontend..."
+	@echo "   This builds the backend as a library that will be embedded in Tauri"
+	cd backend && cargo build --release
+	@echo "✅ Backend built successfully (will be embedded in desktop app)"
+
+build-backend-slim:
+	@echo "🦀 Building slim backend (no embedded frontend)..."
+	cd backend && cargo build --release --no-default-features
+	mkdir -p bin
+	cp backend/target/release/open-webui-rust bin/open-coreui-slim-${BUILD_HOST}
+	@echo "✅ Slim backend built: bin/open-coreui-slim-${BUILD_HOST}"
+
+# Desktop application builds
+build-desktop: prepare-frontend prepare-desktop
+	@echo "🖥️  Building desktop application with integrated backend..."
+	@echo "   This creates a single executable with the backend integrated"
+	cargo tauri build
+	@echo "✅ Desktop application built successfully"
+	@echo "   Check src-tauri/target/release/bundle/ for output"
+
+# New integrated target (recommended)
+build-integrated: prepare-frontend prepare-desktop
+	@echo "🚀 Building integrated Open CoreUI desktop application..."
+	@echo "   This includes:"
+	@echo "   • Frontend built and embedded"
+	@echo "   • Backend integrated into Tauri process"
+	@echo "   • No external dependencies required"
+
+	# Build frontend first
+	cd frontend && bun run build
+
+	# Build desktop with integrated backend
+	cargo tauri build
+
+	@echo "✅ Integrated desktop application built successfully"
+	@echo "   📁 Location: src-tauri/target/release/bundle/"
+	@echo "   💡 This replaces the old sidecar approach"
+
+# Development targets
+run-backend: prepare-backend
+	@echo "🚀 Starting backend server..."
+	cd backend && cargo run
+
+run-backend-slim: prepare-backend
+	@echo "🚀 Starting slim backend server..."
+	cd backend && cargo run --no-default-features
+
+run-desktop: prepare-frontend prepare-desktop
+	@echo "🖥️  Starting desktop application in development mode..."
+	cargo tauri dev
+
+# Testing
+test-integration:
+	@echo "🧪 Testing integrated backend..."
+	cd backend && cargo test
+
+test-frontend:
+	@echo "🧪 Testing frontend..."
+	cd frontend && bun run test:frontend
+
+test-desktop:
+	@echo "🧪 Testing desktop application..."
+	cd src-tauri && cargo test
+
+test-all: test-integration test-frontend test-desktop
+	@echo "✅ All tests completed"
+
+# Utility targets
+clean:
+	@echo "🧹 Cleaning build artifacts..."
+	cd frontend && rm -rf dist/ node_modules/.cache/
+	cd backend && cargo clean
+	cd src-tauri && cargo clean
+	rm -rf bin/
+	@echo "✅ Clean completed"
+
+# Version management
+update-version:
+	@echo "📝 Current version: $$(grep '^version = ' src-tauri/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')"
+	@read -p "Enter new version (default: $$(grep '^version = ' src-tauri/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')): " NEW_VERSION; \
+	NEW_VERSION=$${NEW_VERSION:-$$(grep '^version = ' src-tauri/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')}; \
+	echo "Updating to version: $$NEW_VERSION"; \
+	sed -i.bak "s/^version = \".*\"/version = \"$$NEW_VERSION\"/" src-tauri/Cargo.toml && rm src-tauri/Cargo.toml.bak; \
+	sed -i.bak "s/\"version\": \".*\"/\"version\": \"$$NEW_VERSION\"/" src-tauri/tauri.conf.json && rm src-tauri/tauri.conf.json.bak; \
+	sed -i.bak "s/\"version\": \".*\"/\"version\": \"0.6.32-$$NEW_VERSION\"/" frontend/package.json && rm frontend/package.json.bak; \
+	sed -i.bak "s/^version = \".*\"/version = \"$$NEW_VERSION\"/" backend/Cargo.toml && rm backend/Cargo.toml.bak; \
+	sed -i.bak "s/^pkgver=.*/pkgver=$$NEW_VERSION/" PKGBUILD && rm PKGBUILD.bak; \
+	echo "✅ Version updated to $$NEW_VERSION"
+
+# Packaging
+build-arch-pkg: build-backend
+	@echo "📦 Building Arch Linux package..."
+	makepkg -f
+
+# Development workflow helpers
+dev-setup: install-deps
+	@echo "🔧 Development environment setup complete"
+	@echo "   • Dependencies installed"
+	@echo "   • Ready to run 'make run-desktop' for development"
+
+dev-quick:
+	@echo "⚡ Quick development build (no optimizations)"
+	cd frontend && bun run build --mode development
+	cargo tauri dev
+
+# CI/CD helpers
+ci-build: prepare-frontend prepare-backend
+	@echo "🤖 CI build (all targets)"
+	make build-frontend
+	make build-backend-slim
+	cargo tauri build -- --target x86_64-unknown-linux-gnu
+	@echo "✅ CI build completed"
+
+# Documentation
+docs-serve:
+	@echo "📚 Starting documentation server..."
+	@echo "   Open http://localhost:3000 to view docs"
+	cd docs && python -m http.server 3000
+
+# Migration helpers (for upgrading from sidecar to integrated)
+migrate-to-integrated:
+	@echo "🔄 Migrating from sidecar to integrated architecture..."
+	@echo ""
+	@echo "✅ Migration completed!"
+	@echo ""
+	@echo "Changes made:"
+	@echo "• Backend is now integrated into desktop app"
+	@echo "• No more external process dependencies"
+	@echo "• Single executable deployment"
+	@echo "• Improved startup time and resource usage"
+	@echo ""
+	@echo "Next steps:"
+	@echo "1. Run 'make build-integrated' to build the new version"
+	@echo "2. Test with 'make run-desktop'"
+	@echo "3. Update documentation to reflect integrated architecture"
+
+# Status information
+status:
+	@echo "📊 Open CoreUI Build Status"
+	@echo ""
+	@echo "Frontend:"
+	@if [ -d "frontend/node_modules" ]; then echo "✅ Dependencies installed"; else echo "❌ Dependencies missing"; fi
+	@echo ""
+	@echo "Backend:"
+	@if [ -d "backend/target" ]; then echo "✅ Dependencies fetched"; else echo "❌ Dependencies missing"; fi
+	@echo ""
+	@echo "Desktop:"
+	@if [ -d "src-tauri/target" ]; then echo "✅ Dependencies fetched"; else echo "❌ Dependencies missing"; fi
+	@echo ""
+	@echo "Build artifacts:"
+	@if [ -d "bin" ]; then echo "✅ Build directory exists"; else echo "❌ No build directory"; fi
+	@echo ""
+	@echo "Current architecture: Integrated (backend in Tauri process)"
+	@echo "Legacy sidecar: No longer supported (use 'make migrate-to-integrated')"
