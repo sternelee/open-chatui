@@ -145,12 +145,12 @@ impl KnowledgeSearchEngine {
             KnowledgeDocument {
                 id: "doc-rust-basics".to_string(),
                 title: "Rust Programming Basics".to_string(),
-                content: "Rust is a systems programming language that runs blazingly fast, prevents segfaults, and guarantees thread safety. It's designed for performance and reliability, with features like ownership and borrowing that prevent entire classes of bugs. Rust's zero-cost abstractions make it suitable for systems programming, embedded systems, and web services.",
+                content: "Rust is a systems programming language that runs blazingly fast, prevents segfaults, and guarantees thread safety. It's designed for performance and reliability, with features like ownership and borrowing that prevent entire classes of bugs. Rust's zero-cost abstractions make it suitable for systems programming, embedded systems, and web services.".to_string(),
                 summary: Some("Introduction to Rust programming language fundamentals".to_string()),
                 tags: vec!["rust".to_string(), "programming".to_string(), "systems".to_string(), "memory-safety".to_string()],
                 metadata: HashMap::from([
                     ("difficulty".to_string(), Value::String("beginner".to_string())),
-                    ("read_time_minutes".to_string(), Value::Number(5.0.into())),
+                    ("read_time_minutes".to_string(), Value::Number(serde_json::Number::from(5))),
                 ]),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -160,12 +160,12 @@ impl KnowledgeSearchEngine {
             KnowledgeDocument {
                 id: "doc-async-programming".to_string(),
                 title: "Asynchronous Programming in Rust".to_string(),
-                content: "Async programming in Rust is made easy with the async/await syntax. The async keyword converts a block of code into a state machine that can be paused and resumed. The await keyword is used within async functions to wait for the completion of asynchronous operations. Rust's ownership model ensures thread safety even in concurrent environments.",
+                content: "Async programming in Rust is made easy with the async/await syntax. The async keyword converts a block of code into a state machine that can be paused and resumed. The await keyword is used within async functions to wait for the completion of asynchronous operations. Rust's ownership model ensures thread safety even in concurrent environments.".to_string(),
                 summary: Some("Guide to using async/await for concurrent programming in Rust".to_string()),
                 tags: vec!["rust".to_string(), "async".to_string(), "concurrency".to_string(), "futures".to_string()],
                 metadata: HashMap::from([
                     ("difficulty".to_string(), Value::String("intermediate".to_string())),
-                    ("read_time_minutes".to_string(), Value::Number(8.0.into())),
+                    ("read_time_minutes".to_string(), Value::Number(serde_json::Number::from(8))),
                 ]),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -175,12 +175,12 @@ impl KnowledgeSearchEngine {
             KnowledgeDocument {
                 id: "doc-web-frameworks".to_string(),
                 title: "Modern Web Frameworks Comparison".to_string(),
-                content: "Modern web development offers numerous frameworks like React, Vue, Angular, Svelte, and Next.js. React focuses on component-based architecture and virtual DOM for performance. Vue provides a progressive framework with excellent documentation. Angular offers a full-featured framework with TypeScript support. Svelte compiles away to vanilla JavaScript for optimal performance. Next.js provides React-based full-stack framework with SSR capabilities.",
+                content: "Modern web development offers numerous frameworks like React, Vue, Angular, Svelte, and Next.js. React focuses on component-based architecture and virtual DOM for performance. Vue provides a progressive framework with excellent documentation. Angular offers a full-featured framework with TypeScript support. Svelte compiles away to vanilla JavaScript for optimal performance. Next.js provides React-based full-stack framework with SSR capabilities.".to_string(),
                 summary: Some("Comparison of popular JavaScript web frameworks".to_string()),
                 tags: vec!["javascript".to_string(), "react".to_string(), "vue".to_string(), "angular".to_string(), "svelte".to_string(), "nextjs".to_string(), "frontend".to_string(), "web-development".to_string()],
                 metadata: HashMap::from([
                     ("difficulty".to_string(), Value::String("intermediate".to_string())),
-                    ("read_time_minutes".to_string(), Value::Number(12.0.into())),
+                    ("read_time_minutes".to_string(), Value::Number(serde_json::Number::from(12))),
                 ]),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -193,12 +193,12 @@ impl KnowledgeSearchEngine {
             KnowledgeDocument {
                 id: "doc-onboarding".to_string(),
                 title: "Employee Onboarding Process".to_string(),
-                content: "The employee onboarding process should begin before the employee's first day and continue through their first week. Key components include: workstation setup, account creation, team introductions, initial training sessions, assignment of a mentor, and setting of initial goals. A structured onboarding process helps new hires become productive more quickly and feel welcomed into the organization.",
+                content: "The employee onboarding process should begin before the employee's first day and continue through their first week. Key components include: workstation setup, account creation, team introductions, initial training sessions, assignment of a mentor, and setting of initial goals. A structured onboarding process helps new hires become productive more quickly and feel welcomed into the organization.".to_string(),
                 summary: Some("Comprehensive guide to employee onboarding process".to_string()),
                 tags: vec!["onboarding".to_string(), "hr".to_string(), "employees".to_string(), "process".to_string(), "management".to_string()],
                 metadata: HashMap::from([
                     ("category".to_string(), Value::String("hr".to_string())),
-                    ("read_time_minutes".to_string(), Value::Number(10.0.into())),
+                    ("read_time_minutes".to_string(), Value::Number(serde_json::Number::from(10))),
                 ]),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -208,12 +208,12 @@ impl KnowledgeSearchEngine {
             KnowledgeDocument {
                 id: "doc-meeting-protocol".to_string(),
                 title: "Meeting Protocol Guidelines".to_string(),
-                content: "Effective meetings require clear protocols. Always send an agenda at least 24 hours in advance. Start meetings on time and end on time. Assign a timekeeper and note-taker. Keep phones on silent during meetings. Follow up with action items within 24 hours. Create and distribute meeting notes promptly. Avoid unnecessary meetings and encourage email or chat for simple communications.",
+                content: "Effective meetings require clear protocols. Always send an agenda at least 24 hours in advance. Start meetings on time and end on time. Assign a timekeeper and note-taker. Keep phones on silent during meetings. Follow up with action items within 24 hours. Create and distribute meeting notes promptly. Avoid unnecessary meetings and encourage email or chat for simple communications.".to_string(),
                 summary: Some("Best practices for conducting productive meetings".to_string()),
                 tags: vec!["meetings".to_string(), "protocol".to_string(), "productivity".to_string(), "guidelines".to_string(), "communication".to_string()],
                 metadata: HashMap::from([
                     ("category".to_string(), Value::String("business".to_string())),
-                    ("read_time_minutes".to_string(), Value::Number(6.0.into())),
+                    ("read_time_minutes".to_string(), Value::Number(serde_json::Number::from(6))),
                 ]),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -368,7 +368,7 @@ impl KnowledgeSearchEngine {
         // Convert to search results and sort by score
         let mut results: Vec<SearchResult> = matching_docs
             .into_iter()
-            .filter_map(|(doc_id, (term_count, score))| {
+            .filter_map(|(doc_id, (_term_count, score))| {
                 self.documents.get(&doc_id).map(|doc| SearchResult {
                     document: doc.clone(),
                     score,

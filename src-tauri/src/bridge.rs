@@ -5,12 +5,6 @@
 
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use tauri::State;
-use actix_web::{
-    http::{Method, Uri},
-    HttpRequest, HttpResponse,
-    http::header::{HeaderMap, HeaderValue},
-};
 use crate::backend_routes::BackendRouter;
 
 /// Represents an HTTP request that can be processed by an Actix-web server

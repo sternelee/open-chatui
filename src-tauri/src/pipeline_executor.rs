@@ -320,7 +320,7 @@ impl PipelineExecutor {
             // If step failed, stop execution
             if step_result.status == PipelineStatus::Failed {
                 execution.status = PipelineStatus::Failed;
-                execution.error_message = step_result.error_message;
+                execution.error_message = step_result.error_message.clone();
                 execution.completed_at = Some(step_end);
                 execution.step_results.push(step_result);
                 break;
@@ -349,7 +349,7 @@ impl PipelineExecutor {
         let started_at = Utc::now();
 
         // Simulate step execution time
-        let execution_time = std::time::Duration::from_millis(step.timeout_seconds * 1000);
+        let _execution_time = std::time::Duration::from_millis(step.timeout_seconds * 1000);
 
         // For demo purposes, we'll use a shorter time
         let simulated_time = std::time::Duration::from_millis(
@@ -422,7 +422,7 @@ impl PipelineExecutor {
                         cleaned = cleaned.split_whitespace().collect::<Vec<&str>>().join(" ");
                     }
                     if normalize_line_endings {
-                        cleaned = cleaned.replace("\r\n", "\n").replace('\r', '\n');
+                        cleaned = cleaned.replace("\r\n", "\n").replace("\r", "\n");
                     }
 
                     serde_json::json!({
@@ -544,15 +544,15 @@ impl PipelineExecutor {
                                         if let Some(obj) = item.as_object() {
                                             headers.iter()
                                                 .map(|key| {
-                                                    obj.get(key)
+                                                    obj.get(key.as_str())
                                                         .and_then(|v| v.as_str())
                                                         .unwrap_or("")
                                                 })
                                                 .collect::<Vec<_>>()
                                                 .join(",")
                                         } else {
-                                            vec![]
-                                        }.join(",")
+                                            String::new()
+                                        }
                                     })
                                     .collect::<Vec<_>>()
                                     .join("\n");
@@ -581,14 +581,15 @@ impl PipelineExecutor {
                 }
             },
             "map" => {
+                let empty_vec = vec![];
                 let transformations = step.config.get("transformations")
                     .and_then(|v| v.as_array())
-                    .unwrap_or(&serde_json::Value::Array(vec![]));
+                    .unwrap_or(&empty_vec);
 
                 let mut result = input.clone();
 
-                if let Some(transform_array) = transformations.as_array() {
-                    for transform in transform_array {
+                if !transformations.is_empty() {
+                    for transform in transformations {
                         if let Some(obj) = transform.as_object() {
                             let field = obj.get("field")
                                 .and_then(|v| v.as_str())
@@ -605,7 +606,7 @@ impl PipelineExecutor {
                                                 let new_value = current * factor;
                                                 let _ = result.pointer_mut(&format!("/{}", field));
                                                 if let Some(val_ref) = result.pointer_mut(&format!("/{}", field)) {
-                                                    *val_ref = serde_json::Value::Number(serde_json::Number::from_f64(new_value).unwrap_or_else(|_| serde_json::Number::from(0)));
+                                                    *val_ref = serde_json::Value::Number(serde_json::Number::from_f64(new_value).unwrap_or(serde_json::Number::from(0)));
                                                 }
                                             }
                                         }
@@ -617,7 +618,7 @@ impl PipelineExecutor {
                                                     let new_value = current + add_num;
                                                     let _ = result.pointer_mut(&format!("/{}", field));
                                                     if let Some(val_ref) = result.pointer_mut(&format!("/{}", field)) {
-                                                        *val_ref = serde_json::Value::Number(serde_json::Number::from_f64(new_value).unwrap_or_else(|_| serde_json::Number::from(0)));
+                                                        *val_ref = serde_json::Value::Number(serde_json::Number::from_f64(new_value).unwrap_or(serde_json::Number::from(0)));
                                                     }
                                                 } else if let Some(add_str) = add_value.as_str() {
                                                     if let Some(current_str) = input.pointer(&format!("/{}", field)).and_then(|v| v.as_str()) {
@@ -874,11 +875,12 @@ impl PipelineExecutor {
             ("successful".to_string(), serde_json::Value::Number(successful.into())),
             ("failed".to_string(), serde_json::Value::Number(failed.into())),
             ("success_rate".to_string(), serde_json::Value::Number(
-                if total_executions > 0 {
+                serde_json::Number::from_f64(if total_executions > 0 {
                     (successful as f64 / total_executions as f64) * 100.0
                 } else {
                     0.0
-                }
+                })
+                .unwrap_or(serde_json::Number::from(0))
             )),
         ])
     }

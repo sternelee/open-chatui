@@ -10,6 +10,8 @@ mod backend_integration;
 mod file_manager;
 mod pipeline_executor;
 mod knowledge_search;
+mod socket_bridge;
+mod socket_commands;
 
 use bridge::{LocalRequest, LocalResponse, AppState, process_local_request};
 use backend_routes::BackendRouter;
@@ -104,6 +106,20 @@ async fn main() {
             // Backend commands
             simple_health_check,
             local_app_request,
+            // Socket commands
+            socket_commands::init_socket,
+            socket_commands::socket_connect,
+            socket_commands::socket_disconnect,
+            socket_commands::join_room,
+            socket_commands::leave_room,
+            socket_commands::emit_event,
+            socket_commands::get_connection_status,
+            socket_commands::send_chat_message,
+            socket_commands::send_typing_indicator,
+            socket_commands::update_presence_status,
+            socket_commands::join_document,
+            socket_commands::send_document_update,
+            socket_commands::get_socket_stats,
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application")
