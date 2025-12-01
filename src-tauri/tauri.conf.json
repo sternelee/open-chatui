@@ -3,7 +3,6 @@
   "productName": "Open CoreUI Desktop",
   "version": "0.9.6",
   "identifier": "com.github.xxnuo.ocd",
-  "mainBinaryName": "Open CoreUI Desktop",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
