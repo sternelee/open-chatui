@@ -270,7 +270,9 @@ impl BackendRouter {
             "database": if db_healthy { "connected" } else { "disconnected" }
         });
 
-        Ok((200, health_data.to_string(), HashMap::new()))
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        Ok((200, health_data.to_string(), headers))
     }
 
     // === Configuration Handlers ===
@@ -289,7 +291,9 @@ impl BackendRouter {
             }
         });
 
-        Ok((200, config_data.to_string(), HashMap::new()))
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        Ok((200, config_data.to_string(), headers))
     }
 
     async fn handle_update_config(&self, body: Value) -> Result<(u16, String, HashMap<String, String>), Box<dyn std::error::Error + Send + Sync>> {
@@ -310,7 +314,9 @@ impl BackendRouter {
     async fn handle_list_models(&self) -> Result<(u16, String, HashMap<String, String>), Box<dyn std::error::Error + Send + Sync>> {
         let model_service = ModelService::new(self.state.config.read().unwrap().clone());
         let models = model_service.get_all_models(&self.state.database).await?;
-        Ok((200, serde_json::json!({"data": models}).to_string(), HashMap::new()))
+        let mut headers = HashMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        Ok((200, serde_json::json!({"data": models}).to_string(), headers))
     }
 
     async fn handle_create_model(&self, body: Value) -> Result<(u16, String, HashMap<String, String>), Box<dyn std::error::Error + Send + Sync>> {

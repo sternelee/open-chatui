@@ -128,6 +128,15 @@ pub async fn process_local_request(
     Ok(response)
 }
 
+/// HTTP request handler for frontend bridge calls
+#[tauri::command]
+pub async fn handle_http_request(
+    app_state: tauri::State<'_, AppState>,
+    localRequest: LocalRequest,  // Parameter name matches frontend
+) -> Result<LocalResponse, String> {
+    process_local_request(&app_state.inner(), localRequest).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

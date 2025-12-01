@@ -50,6 +50,9 @@
 	import { updated } from '$app/state';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
+	// Import Tauri bridge for integrated desktop app
+	import '$lib/tauri-bridge.js';
+
 	// handle frontend updates (https://svelte.dev/docs/kit/configuration#version)
 	beforeNavigate(({ willUnload, to }) => {
 		if (updated.current && !willUnload && to?.url) {

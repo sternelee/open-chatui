@@ -72,8 +72,8 @@ cargo build --workspace
 
 ### Build specific package:
 ```bash
-cargo build -p open-webui-rust    # Backend
-cargo build -p open-coreui-desktop # Tauri desktop
+cargo build -p backend    # Backend
+cargo build -p app # Tauri desktop
 ```
 
 ### Check all packages:
@@ -93,8 +93,8 @@ cargo update -p <dependency-name>
 
 ## Workspace Members
 
-1. **backend** (`open-webui-rust`): Actix-web backend server with comprehensive API
-2. **src-tauri** (`open-coreui-desktop`): Tauri desktop application with integrated backend
+1. **backend** (`backend`): Actix-web backend server with comprehensive API
+2. **src-tauri** (`app`): Tauri desktop application with integrated backend
 
 ## Shared Dependencies
 

@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "frontendDist": "./static"
+    "frontendDist": "../frontend/build"
   },
   "app": {
     "withGlobalTauri": true,

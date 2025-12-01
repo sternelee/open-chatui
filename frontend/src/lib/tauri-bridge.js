@@ -10,13 +10,14 @@
  * - Fallback to regular HTTP requests when not in Tauri environment
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { isTauri } from '@tauri-apps/api/core';
+const { invoke } = window.__TAURI__.core;
+
+let localAppRequestCommand = "handle_http_request";
 
 // Global configuration
 const CONFIG = {
     // Whether to use the bridge (auto-detected)
-    enabled: isTauri(),
+    enabled: window.__TAURI__ ? true : false,
 
     // Base URL for fallback requests
     fallbackBaseUrl: 'http://localhost:8168',
@@ -46,96 +47,109 @@ const CONFIG = {
     ]
 };
 
-/**
- * Request queue for handling concurrent requests
- */
-class RequestQueue {
-    constructor() {
-        this.pending = new Map();
-        this.requestId = 0;
-    }
+function initialize(initialPath, localAppRequestCommandOverride) {
+  if (localAppRequestCommandOverride) {
+    localAppRequestCommand = localAppRequestCommandOverride;
+  }
 
-    generateId() {
-        return `req_${++this.requestId}_${Date.now()}`;
-    }
-
-    add(request) {
-        const id = this.generateId();
-        this.pending.set(id, { request, resolve: null, reject: null });
-        return id;
-    }
-
-    resolve(id, response) {
-        const item = this.pending.get(id);
-        if (item && item.resolve) {
-            item.resolve(response);
-        }
-        this.pending.delete(id);
-    }
-
-    reject(id, error) {
-        const item = this.pending.get(id);
-        if (item && item.reject) {
-            item.reject(error);
-        }
-        this.pending.delete(id);
-    }
+  proxyFetch();
 }
 
-const requestQueue = new RequestQueue();
+function proxyFetch() {
+  const originalFetch = window.fetch;
 
-/**
- * Convert fetch Request to LocalRequest format
- */
-function requestToLocalRequest(request, url) {
-    const headers = {};
-    request.headers.forEach((value, key) => {
-        headers[key.toLowerCase()] = value;
-    });
+  window.fetch = async function (...args) {
+    const [url, options] = args;
 
-    return {
-        uri: url + request.url.substring(window.location.origin.length),
-        method: request.method,
-        body: request.method !== 'GET' && request.method !== 'HEAD' ?
-               request.text() : null,
-        headers: headers
-    };
-}
+    // Check if we should use the bridge for this request
+    if (!CONFIG.enabled || !shouldUseBridge(url)) {
+      console.log('🔗 Using original fetch for:', url);
+      return originalFetch(...args);
+    }
 
-/**
- * Convert LocalResponse to fetch Response
- */
-function localResponseToResponse(localResponse) {
-    const headers = new Headers();
-    Object.entries(localResponse.headers).forEach(([key, value]) => {
-        headers.set(key, value);
-    });
+    console.log('🌉 Using Tauri bridge for:', url);
 
-    return new Response(localResponse.body, {
-        status: localResponse.status_code,
-        statusText: getStatusText(localResponse.status_code),
-        headers: headers
-    });
-}
+    if (url.startsWith("ipc://")) {
+      return originalFetch(...args);
+    }
 
-/**
- * Get status text for HTTP status codes
- */
-function getStatusText(statusCode) {
-    const statusTexts = {
-        200: 'OK',
-        201: 'Created',
-        204: 'No Content',
-        400: 'Bad Request',
-        401: 'Unauthorized',
-        403: 'Forbidden',
-        404: 'Not Found',
-        500: 'Internal Server Error',
-        502: 'Bad Gateway',
-        503: 'Service Unavailable'
+    const request = {
+      uri: url.startsWith('http') ? new URL(url).pathname + new URL(url).search : url,
+      method: options?.method || "GET",
+      headers: options?.headers || {},
+      ...(options?.body && { body: options.body }),
     };
 
-    return statusTexts[statusCode] || 'Unknown';
+    let response = await invoke(localAppRequestCommand, {
+      localRequest: request,
+    });
+
+    // Handle redirects
+    while ([301, 302, 303, 307, 308].includes(parseInt(response.status_code))) {
+      const location = response.headers["location"];
+
+      const redirectRequest = {
+        uri: location,
+        method: "GET",
+        headers: {},
+      };
+      response = await invoke(localAppRequestCommand, {
+        localRequest: redirectRequest,
+      });
+    }
+
+    // Convert response.body (which is a number array) to Uint8Array, then to text
+    console.log('🔍 Raw Tauri response:', response);
+
+    let bodyText;
+    if (Array.isArray(response.body)) {
+      console.log('🔧 Converting byte array to text, length:', response.body.length);
+      const bodyByteArray = new Uint8Array(response.body);
+      const decoder = new TextDecoder("utf-8");
+      bodyText = decoder.decode(bodyByteArray);
+      console.log('✅ Converted body text:', bodyText);
+    } else if (typeof response.body === 'string') {
+      console.log('📝 Body is already string:', response.body);
+      bodyText = response.body;
+    } else if (response.body && typeof response.body === 'object') {
+      // Handle nested structure
+      console.log('🏗️ Body is object:', response.body);
+      bodyText = JSON.stringify(response.body);
+    } else {
+      console.log('⚠️ Unknown body format, using empty string:', typeof response.body, response.body);
+      bodyText = response.body || '';
+    }
+
+    const status = parseInt(response.status_code);
+    const headers = new Headers(response.headers);
+
+    // Log final response
+    console.log('🌐 Final response:', {
+      status,
+      headers: Object.fromEntries(headers.entries()),
+      bodyPreview: bodyText.substring(0, 200) + (bodyText.length > 200 ? '...' : '')
+    });
+
+    // Create response and test if it's correctly parsed
+    const finalResponse = new Response(bodyText, { status, headers });
+
+    // Test if JSON parsing works
+    if (headers.get('content-type')?.includes('application/json')) {
+      try {
+        const parsed = await finalResponse.clone().json();
+        console.log('✅ JSON parsing successful:', parsed);
+      } catch (e) {
+        console.error('❌ JSON parsing failed:', e);
+        console.error('Body that failed to parse:', bodyText);
+      }
+    }
+
+    return finalResponse;
+  };
+
+  // Preserve original fetch for direct access
+  window.originalFetch = originalFetch;
+  console.log('🌉 Tauri bridge initialized and fetch patched');
 }
 
 /**
@@ -168,243 +182,190 @@ function shouldUseBridge(url) {
     }
 }
 
-/**
- * Intercept and handle HTTP request through Tauri bridge
- */
-async function handleRequestWithBridge(input, init = {}) {
-    try {
-        const request = new Request(input, init);
-        const url = request.url;
-
-        // Create LocalRequest
-        const body = init.body ?
-            (typeof init.body === 'string' ? init.body : JSON.stringify(init.body)) :
-            null;
-
-        const localRequest = {
-            uri: url.substring(window.location.origin.length),
-            method: request.method,
-            body: body,
-            headers: Object.fromEntries(request.headers.entries())
-        };
-
-        // Send request through Tauri bridge
-        const localResponse = await invoke('handle_http_request', {
-            request: localRequest
-        });
-
-        // Convert back to Response
-        return localResponseToResponse(localResponse);
-
-    } catch (error) {
-        console.error('Bridge request failed:', error);
-
-        // Fallback to regular fetch if bridge fails
-        if (CONFIG.fallbackBaseUrl) {
-            try {
-                const fallbackUrl = new URL(input, CONFIG.fallbackBaseUrl);
-                return fetch(fallbackUrl, init);
-            } catch (fallbackError) {
-                console.error('Fallback request also failed:', fallbackError);
-            }
-        }
-
-        throw error;
-    }
-}
-
-/**
- * Enhanced fetch function with automatic bridge detection
- */
-async function tauriFetch(input, init = {}) {
-    // If not in Tauri environment or bridge is disabled, use regular fetch
-    if (!CONFIG.enabled) {
-        return fetch(input, init);
-    }
-
-    // Convert input to URL string for consistent handling
-    const urlString = typeof input === 'string' ? input : input.url;
-
-    // Check if we should use the bridge for this request
-    if (shouldUseBridge(urlString)) {
-        return handleRequestWithBridge(input, init);
-    }
-
-    // Use regular fetch for non-bridge requests
-    return fetch(input, init);
-}
-
-/**
- * Patch global fetch to use our bridge
- */
-function patchGlobalFetch() {
-    if (!CONFIG.enabled) {
-        console.log('🌐 Tauri bridge disabled, using regular fetch');
-        return;
-    }
-
-    const originalFetch = window.fetch;
-
-    window.fetch = function(input, init = {}) {
-        return tauriFetch(input, init);
-    };
-
-    // Preserve original fetch for direct access
-    window.originalFetch = originalFetch;
-
-    console.log('🌉 Tauri bridge initialized and fetch patched');
-}
-
-/**
- * Initialize the bridge when DOM is ready
- */
-function initializeBridge() {
-    // Wait for DOM to be ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeBridge);
-        return;
-    }
-
-    console.log('🚀 Initializing Tauri bridge for Open CoreUI...');
-
-    // Patch global fetch
-    patchGlobalFetch();
-
-    // Test the bridge with a health check
-    setTimeout(async () => {
-        try {
-            const response = await tauriFetch('/health');
-            const data = await response.json();
-            console.log('✅ Bridge test successful:', data);
-
-            // Emit custom event to notify application
-            window.dispatchEvent(new CustomEvent('tauri-bridge-ready', {
-                detail: { success: true, data }
-            }));
-        } catch (error) {
-            console.error('❌ Bridge test failed:', error);
-
-            // Emit error event
-            window.dispatchEvent(new CustomEvent('tauri-bridge-error', {
-                detail: { success: false, error: error.message }
-            }));
-        }
-    }, 1000);
-}
-
-/**
- * Direct access functions for specific API endpoints
- */
-export const bridgeAPI = {
-    /**
-     * Get application configuration
-     */
-    async getConfig() {
-        if (!CONFIG.enabled) {
-            return fetch('/api/config').then(r => r.json());
-        }
-
-        try {
-            const response = await invoke('get_backend_config');
-            return response;
-        } catch (error) {
-            console.error('Failed to get config via bridge:', error);
-            throw error;
-        }
-    },
-
-    /**
-     * Get available models
-     */
-    async getModels() {
-        if (!CONFIG.enabled) {
-            return fetch('/api/models').then(r => r.json());
-        }
-
-        try {
-            const response = await invoke('get_backend_models');
-            return response;
-        } catch (error) {
-            console.error('Failed to get models via bridge:', error);
-            throw error;
-        }
-    },
-
-    /**
-     * Send chat completion request
-     */
-    async chatCompletion(payload, userId = null) {
-        if (!CONFIG.enabled) {
-            return fetch('/api/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).then(r => r.json());
-        }
-
-        try {
-            const response = await invoke('chat_completion', {
-                payload,
-                userId
-            });
-            return response;
-        } catch (error) {
-            console.error('Chat completion failed via bridge:', error);
-            throw error;
-        }
-    },
-
-    /**
-     * Health check
-     */
-    async healthCheck() {
-        if (!CONFIG.enabled) {
-            return fetch('/health').then(r => r.json());
-        }
-
-        try {
-            const response = await invoke('health_check');
-            return response;
-        } catch (error) {
-            console.error('Health check failed via bridge:', error);
-            throw error;
-        }
-    },
-
-    /**
-     * Initialize the backend
-     */
-    async initializeBackend() {
-        if (!CONFIG.enabled) {
-            return { success: true, message: 'Not in Tauri environment' };
-        }
-
-        try {
-            const response = await invoke('initialize_bridge_and_backend');
-            return { success: true, message: response };
-        } catch (error) {
-            console.error('Backend initialization failed:', error);
-            return { success: false, error: error.message };
-        }
-    }
-};
-
-// Auto-initialize
+// Auto-initialize when DOM is ready
 if (typeof window !== 'undefined') {
-    initializeBridge();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Initializing Tauri bridge for Open CoreUI...');
+            initialize();
+        });
+    } else {
+        console.log('🚀 Initializing Tauri bridge for Open CoreUI...');
+        initialize();
+    }
 }
 
 // Export for use in other modules
 export default {
-    tauriFetch,
-    bridgeAPI,
-    patchGlobalFetch,
+    initialize,
     CONFIG
 };
 
 // Also provide global access
 window.TauriBridge = {
-    tauriFetch,
-    bridgeAPI,
+    initialize,
     CONFIG
 };
+
+// BEGIN XHR-FETCH-PROXY
+(function (originalXMLHttpRequest) {
+    class EventTarget {
+        constructor() {
+            this.eventListeners = {};
+        }
+
+        addEventListener(event, callback) {
+            if (!this.eventListeners[event]) {
+                this.eventListeners[event] = [];
+            }
+            this.eventListeners[event].push(callback);
+        }
+
+        removeEventListener(event, callback) {
+            if (!this.eventListeners[event]) return;
+            const index = this.eventListeners[event].indexOf(callback);
+            if (index !== -1) {
+                this.eventListeners[event].splice(index, 1);
+            }
+        }
+
+        _triggerEvent(event, ...args) {
+            if (this.eventListeners[event]) {
+                this.eventListeners[event].forEach(callback => callback.apply(this, args));
+            }
+        }
+    }
+
+
+    class ProxyXMLHttpRequest extends EventTarget {
+        constructor() {
+            super();
+            this.onload = null;
+            this.onerror = null;
+            this.onreadystatechange = null;
+
+            this.readyState = 0;
+            this.status = 0;
+            this.statusText = '';
+            this.response = null;
+            this.responseText = null;
+            this.responseType = '';
+            this.responseURL = '';
+            this.method = null;
+            this.url = null;
+            this.async = true;
+            this.requestHeaders = {};
+            this.controller = new AbortController(); // to handle aborts
+            this.eventListeners = {};
+            this.upload = new EventTarget(); // Adding upload event listeners
+            this._triggerEvent('readystatechange');
+        }
+
+        open(method, url, async = true, user = null, password = null) {
+            this.method = method;
+            this.url = url;
+            this.async = async;
+            this.user = user;
+            this.password = password;
+            this.readyState = 1;
+            this._triggerEvent('readystatechange');
+        }
+
+        send(data = null) {
+            const options = {
+                method: this.method,
+                headers: this.requestHeaders,
+                body: data,
+                signal: this.controller.signal,
+                mode: 'cors',
+                credentials: this.user || this.password ? 'include' : 'same-origin',
+            };
+
+            if (this.user && this.password) {
+                const base64Credentials = btoa(`${this.user}:${this.password}`);
+                options.headers['Authorization'] = `Basic ${base64Credentials}`;
+            }
+
+            this.readyState = 2;
+            this._triggerEvent('readystatechange');
+
+            fetch(this.url, options)
+                .then(response => {
+                    this.status = response.status;
+                    this.statusText = response.statusText;
+                    this.responseURL = response.url;
+                    this._parseHeaders(response.headers);
+
+                    this.readyState = 3;
+                    this._triggerEvent('readystatechange');
+                    return this._parseResponse(response);
+                })
+                .then(responseData => {
+                    this.readyState = 4;
+                    this.response = responseData;
+                    this.responseText = typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+                    this._triggerEvent('readystatechange');
+                    if (this.onload) this.onload();
+                })
+                .catch(error => {
+                    if (this.onerror) this.onerror(error);
+                });
+        }
+
+        setRequestHeader(header, value) {
+            this.requestHeaders[header] = value;
+        }
+
+        abort() {
+            this.controller.abort();
+            this.readyState = 0;
+            this._triggerEvent('readystatechange');
+        }
+
+        getResponseHeader(header) {
+            return this.responseHeaders[header.toLowerCase()] || null;
+        }
+
+        getAllResponseHeaders() {
+            return Object.entries(this.responseHeaders)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join('\r\n');
+        }
+
+        overrideMimeType(mime) {
+            this.overrideMime = mime;
+        }
+
+        _parseHeaders(headers) {
+            this.responseHeaders = {};
+            headers.forEach((value, key) => {
+                this.responseHeaders[key.toLowerCase()] = value;
+            });
+        }
+
+        _parseResponse(response) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return response.json();
+            } else if (contentType && (contentType.includes('text/') || contentType.includes('xml'))) {
+                return response.text();
+            } else {
+                return response.blob(); // default to blob for binary data
+            }
+        }
+
+        _triggerEvent(event, ...args) {
+            super._triggerEvent(event, ...args);
+            if (this[`on${event}`]) {
+                this[`on${event}`].apply(this, args);
+            }
+
+            if (event.startsWith('progress') || event === 'loadstart' || event === 'loadend' || event === 'abort') {
+                this.upload._triggerEvent(event, ...args);
+            }
+        }
+    }
+
+    window.XMLHttpRequest = ProxyXMLHttpRequest;
+})(window.XMLHttpRequest);
+// END XHR-FETCH-PROXY

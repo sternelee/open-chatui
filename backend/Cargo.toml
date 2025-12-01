@@ -1,12 +1,17 @@
 [package]
-name = "open-webui-rust"
+name = "backend"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
 [dependencies]
 # Web framework
-actix-web = { version = "4", features = ["cookies", "rustls-0_23", "compress-gzip", "compress-brotli"] }
+actix-web = { version = "4", features = [
+  "cookies",
+  "rustls-0_23",
+  "compress-gzip",
+  "compress-brotli",
+] }
 actix-files = { workspace = true }
 actix-cors = { workspace = true }
 actix-multipart = "0.7"
@@ -21,13 +26,13 @@ async-trait = { workspace = true }
 
 # Database
 sqlx = { version = "0.8", features = [
-    "runtime-tokio",
-    "tls-rustls",
-    "sqlite",
-    "json",
-    "chrono",
-    "uuid",
-    "migrate"
+  "runtime-tokio",
+  "tls-rustls",
+  "sqlite",
+  "json",
+  "chrono",
+  "uuid",
+  "migrate",
 ] }
 
 # Serialization
@@ -45,7 +50,11 @@ uuid = { workspace = true }
 reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
 
 # Redis
-redis = { version = "0.32.7", features = ["tokio-comp", "connection-manager", "streams"] }
+redis = { version = "0.32.7", features = [
+  "tokio-comp",
+  "connection-manager",
+  "streams",
+] }
 deadpool-redis = "0.22.0"
 deadpool = "0.12"
 
@@ -134,6 +143,10 @@ yrs = "0.24.0"
 [features]
 default = ["embed-frontend"]
 embed-frontend = []
-embeddings = ["candle-core", "candle-nn", "candle-transformers", "hf-hub", "tokenizers"]
-
-
+embeddings = [
+  "candle-core",
+  "candle-nn",
+  "candle-transformers",
+  "hf-hub",
+  "tokenizers",
+]

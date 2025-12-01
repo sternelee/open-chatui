@@ -13,7 +13,7 @@ mod knowledge_search;
 mod socket_bridge;
 mod socket_commands;
 
-use bridge::{LocalRequest, LocalResponse, AppState, process_local_request};
+use bridge::{LocalRequest, LocalResponse, AppState, process_local_request, handle_http_request};
 use backend_routes::BackendRouter;
 use backend_integration::initialize_backend;
 
@@ -106,6 +106,7 @@ async fn main() {
             // Backend commands
             simple_health_check,
             local_app_request,
+            handle_http_request,
             // Socket commands
             socket_commands::init_socket,
             socket_commands::socket_connect,
