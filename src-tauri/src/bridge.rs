@@ -11,6 +11,7 @@ use actix_web::{
     HttpRequest, HttpResponse,
     http::header::{HeaderMap, HeaderValue},
 };
+use crate::backend_routes::BackendRouter;
 
 /// Represents an HTTP request that can be processed by an Actix-web server
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -29,60 +30,47 @@ pub struct LocalResponse {
     pub headers: HashMap<String, String>,
 }
 
-/// Application state containing the backend configuration
+/// Application state containing the backend router
 #[derive(Clone)]
 pub struct AppState {
-    // This will hold our integrated backend state
-    pub backend_available: bool,
+    // Backend router for handling all API requests
+    pub backend_router: BackendRouter,
 }
 
 impl LocalRequest {
-    /// Process the request using the integrated backend
-    pub async fn process_with_backend(self) -> LocalResponse {
-        // This will be implemented to use our integrated backend
-        // For now, return a simple response based on the path
-        let (status_code, body) = match self.uri.as_str() {
-            "/health" | "/api/health" => (
-                200,
-                serde_json::json!({
-                    "status": true,
-                    "message": "Backend is running"
-                }).to_string()
-            ),
-            "/api/config" => (
-                200,
-                serde_json::json!({
-                    "status": true,
-                    "name": "Open CoreUI",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "features": {
-                        "auth": false,
-                        "enable_signup": false,
-                        "enable_login_form": false,
-                        "enable_api_key": false,
-                        "enable_websocket": false,
-                        "enable_version_update_check": false,
-                    }
-                }).to_string()
-            ),
-            "/api/models" => (
-                200,
-                serde_json::json!({
-                    "data": []
-                }).to_string()
-            ),
-            _ => (
-                404,
-                serde_json::json!({
-                    "error": "Not Found"
-                }).to_string()
-            ),
+    /// Process the request using the integrated backend router
+    pub async fn process_with_backend(self, backend_router: &BackendRouter) -> LocalResponse {
+        // Parse query parameters from the URI
+        let query_params = if let Some(query_start) = self.uri.find('?') {
+            let query_part = &self.uri[query_start + 1..];
+            let mut params = HashMap::new();
+            for pair in query_part.split('&') {
+                if let Some((key, value)) = pair.split_once('=') {
+                    params.insert(key.to_string(), value.to_string());
+                }
+            }
+            params
+        } else {
+            HashMap::new()
         };
 
-        LocalResponse {
-            status_code,
-            body: body.into_bytes(),
-            headers: HashMap::new(),
+        // Extract path without query parameters
+        let path = if let Some(query_start) = self.uri.find('?') {
+            &self.uri[..query_start]
+        } else {
+            &self.uri
+        };
+
+        // Route the request using the backend router
+        match backend_router.route_request(&self.method, path,
+            self.body.and_then(|b| serde_json::from_str(&b).ok()),
+            query_params).await {
+            Ok(response) => response,
+            Err(e) => LocalResponse {
+                status_code: 500,
+                body: format!("Internal Server Error: {}", e).into_bytes(),
+                headers: HashMap::new(),
+            }
         }
     }
 }
@@ -138,11 +126,11 @@ impl LocalResponse {
 
 /// Process local app requests (can be used from main.rs)
 pub async fn process_local_request(
-    _state: &AppState,
+    state: &AppState,
     local_request: LocalRequest,
 ) -> Result<LocalResponse, String> {
-    // Process the request using the integrated backend
-    let response = local_request.process_with_backend().await;
+    // Process the request using the integrated backend router
+    let response = local_request.process_with_backend(&state.backend_router).await;
     Ok(response)
 }
 

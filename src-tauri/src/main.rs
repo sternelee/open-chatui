@@ -3,10 +3,17 @@
 use tauri::RunEvent;
 use tracing::info;
 
-// Import our bridge module
+// Import our modules
 mod bridge;
+mod backend_routes;
+mod backend_integration;
+mod file_manager;
+mod pipeline_executor;
+mod knowledge_search;
 
 use bridge::{LocalRequest, LocalResponse, AppState, process_local_request};
+use backend_routes::BackendRouter;
+use backend_integration::initialize_backend;
 
 #[tauri::command]
 fn toggle_fullscreen(window: tauri::Window) {
@@ -52,13 +59,38 @@ fn initialize_logging() {
         .expect("Failed to set global subscriber");
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Initialize logging first
     initialize_logging();
 
+    // Initialize the backend
+    let backend_state = match initialize_backend().await {
+        Ok(state) => {
+            info!("✅ Backend initialized successfully");
+            state
+        },
+        Err(e) => {
+            panic!("Failed to initialize backend: {}", e);
+        }
+    };
+
+    // Create the backend router
+    let backend_router = BackendRouter::new(backend_state);
+
+    // Initialize enhanced services
+    match backend_router.initialize().await {
+        Ok(()) => {
+            info!("✅ Enhanced services initialized successfully");
+        },
+        Err(e) => {
+            panic!("Failed to initialize enhanced services: {}", e);
+        }
+    }
+
     // Create the application state
     let app_state = AppState {
-        backend_available: true, // For now, we'll assume backend is available
+        backend_router,
     };
 
     tauri::Builder::default()
